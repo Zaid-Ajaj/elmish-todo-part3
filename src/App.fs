@@ -12,21 +12,26 @@ type Todo = {
   Completed : bool
 }
 
+type TodoBeingEdited = {
+  Id: int
+  Description: string
+} 
+
 type State = { 
   TodoList: Todo list 
-  NewTodoDescription : string 
-  EditModel : (int * string) option
+  NewTodo : string 
+  TodoBeingEdited : TodoBeingEdited option
 }
 
 type Msg =
-  | SetNewTodoDescription of string 
+  | SetNewTodo of string 
   | AddNewTodo 
   | DeleteTodo of int
   | ToggleCompleted of int
   | CancelEdit
   | ApplyEdit
-  | StartEditModel of int 
-  | EditModelModified of string 
+  | StartEditingTodo of int 
+  | SetEditedDescription of string 
 
   
 let init() = { 
@@ -34,16 +39,16 @@ let init() = {
     { Id = 1; Description = "Learn F#"; Completed = false } 
     { Id = 2; Description = "Learn Elmish"; Completed = true } 
   ]
-  NewTodoDescription = ""
-  EditModel = None
+  NewTodo = ""
+  TodoBeingEdited = None
 }
 
 let update (msg: Msg) (state: State) =
   match msg with
-  | SetNewTodoDescription desc -> 
-      { state with NewTodoDescription = desc }
+  | SetNewTodo desc -> 
+      { state with NewTodo = desc }
   
-  | AddNewTodo when String.IsNullOrWhiteSpace state.NewTodoDescription ->
+  | AddNewTodo when String.IsNullOrWhiteSpace state.NewTodo ->
       state 
 
   | AddNewTodo ->
@@ -57,11 +62,11 @@ let update (msg: Msg) (state: State) =
 
       let nextTodo = 
         { Id = nextTodoId
-          Description = state.NewTodoDescription
+          Description = state.NewTodo
           Completed = false }
           
       { state with 
-          NewTodoDescription = ""
+          NewTodo = ""
           TodoList = List.append state.TodoList [nextTodo] }
 
   | DeleteTodo todoId ->
@@ -81,37 +86,37 @@ let update (msg: Msg) (state: State) =
  
       { state with TodoList = nextTodoList }
 
-  | StartEditModel todoId -> 
+  | StartEditingTodo todoId -> 
       let nextEditModel = 
         state.TodoList
         |> List.tryFind (fun todo -> todo.Id = todoId)
-        |> Option.map (fun todo -> todoId, todo.Description)     
+        |> Option.map (fun todo -> { Id = todoId; Description = todo.Description })     
       
-      { state with EditModel = nextEditModel } 
+      { state with TodoBeingEdited = nextEditModel } 
 
   | CancelEdit -> 
-      { state with EditModel = None }
+      { state with TodoBeingEdited = None }
   
   | ApplyEdit -> 
-      match state.EditModel with 
+      match state.TodoBeingEdited with 
       | None -> state 
-      | Some (_, "") -> state 
-      | Some (todoId, editText) -> 
+      | Some todoBeingEdited when todoBeingEdited.Description = "" -> state 
+      | Some todoBeingEdited -> 
           let nextTodoList = 
             state.TodoList
             |> List.map (fun todo -> 
-                if todo.Id = todoId
-                then { todo with Description = editText }
+                if todo.Id = todoBeingEdited.Id
+                then { todo with Description = todoBeingEdited.Description }
                 else todo)
           
-          { state with TodoList = nextTodoList; EditModel = None }
+          { state with TodoList = nextTodoList; TodoBeingEdited = None }
 
-  | EditModelModified newText -> 
+  | SetEditedDescription newText -> 
       let nextEditModel = 
-        state.EditModel
-        |> Option.map (fun (id, oldText) -> id, newText) 
+        state.TodoBeingEdited
+        |> Option.map (fun todoBeingEdited -> { todoBeingEdited with Description = newText }) 
       
-      { state with EditModel = nextEditModel }
+      { state with TodoBeingEdited = nextEditModel }
 
 
 let createTodoTextbox state dispatch = 
@@ -119,8 +124,9 @@ let createTodoTextbox state dispatch =
     div [ Class "control is-expanded" ] [ 
       input [ 
         Class "input is-medium"
-        valueOrDefault state.NewTodoDescription
-        OnChange (fun ev -> dispatch (SetNewTodoDescription ev.Value)) ]
+        valueOrDefault state.NewTodo
+        OnChange (fun ev -> dispatch (SetNewTodo ev.Value)) 
+      ]
     ] 
     div [ Class "control" ] [ 
       button [ Class "button is-primary is-medium"; OnClick (fun _ -> dispatch AddNewTodo) ] [ 
@@ -129,30 +135,24 @@ let createTodoTextbox state dispatch =
     ] 
   ] 
 
-let renderEditModel (state: State) (todo: Todo) (dispatch: Msg -> unit) = 
-  let editText = 
-    state.EditModel 
-    |> Option.map snd 
-    |> Option.defaultValue ""
-
+let renderEditForm (todoBeingEdited: TodoBeingEdited) (dispatch: Msg -> unit) = 
   div [ Class "box" ] [
     div [ Class "field is-grouped" ] [ 
       div [ Class "control is-expanded" ] [
         input [ 
           Class "input is-medium"; 
-          valueOrDefault editText; OnChange (fun ev -> dispatch (EditModelModified ev.Value)) ]
+          valueOrDefault todoBeingEdited.Description; 
+          OnChange (fun ev -> dispatch (SetEditedDescription ev.Value)) 
+        ]
       ]
       div [ Class "control buttons" ] [
-     
-          button [ Class "button is-primary"; OnClick (fun _ -> dispatch ApplyEdit)  ] [
-            i [ Class "fa fa-save" ] [ ] 
-          ] 
-          
-          button [ Class "button is-warning"; OnClick (fun _ -> dispatch CancelEdit) ] [ 
-            i [ Class "fa fa-arrow-right" ] [ ] 
-          ] 
-        ]
-      
+        button [ Class "button is-primary"; OnClick (fun _ -> dispatch ApplyEdit)  ] [
+          i [ Class "fa fa-save" ] [ ] 
+        ] 
+        button [ Class "button is-warning"; OnClick (fun _ -> dispatch CancelEdit) ] [ 
+          i [ Class "fa fa-arrow-right" ] [ ] 
+        ] 
+      ]
     ]
   ]
 
@@ -167,14 +167,14 @@ let renderTodo (todo: Todo) (dispatch: Msg -> unit) =
   div [ Class "box" ] [ 
     div [ Class "columns is-mobile" ] [ 
       div [ Class "column" ] [
-        p [ Class "subtitle is-4" ] [ str todo.Description ] 
+        p [ Class "subtitle" ] [ str todo.Description ] 
       ]
-      div [ Class "column" ] [
+      div [ Class "column is-5" ] [
         div [ Class "buttons is-right" ] [
           button [ checkButtonStyle; OnClick(fun _ -> dispatch (ToggleCompleted todo.Id))  ] [
             i [ Class "fa fa-check" ] [ ] 
           ] 
-          button [ Class "button is-primary"; OnClick (fun _ -> dispatch (StartEditModel todo.Id))  ] [
+          button [ Class "button is-primary"; OnClick (fun _ -> dispatch (StartEditingTodo todo.Id))  ] [
             i [ Class "fa fa-edit" ] [ ] 
           ] 
           button [ Class "button is-danger"; OnClick (fun _ -> dispatch (DeleteTodo todo.Id)) ] [ 
@@ -185,22 +185,20 @@ let renderTodo (todo: Todo) (dispatch: Msg -> unit) =
     ]
   ]  
 
-let renderTodoItem (state: State) (todo: Todo) (dispatch: Msg -> unit) = 
-  match state.EditModel with 
-  | Some (todoId, _) when todoId = todo.Id -> renderEditModel state todo dispatch
-  | otherwise -> renderTodo todo dispatch 
-
 let render (state: State) (dispatch: Msg -> unit) =
   div [ Style [ Padding 20 ] ] [
     h3 [ Class "title" ] [ str "Elmish To-Do list" ]
     createTodoTextbox state dispatch
-    div [ Style [ MarginTop 20; MarginBottom 20 ] ]  [ ]
     div [ Class "content" ] [ 
-      for todo in state.TodoList -> renderTodoItem state todo dispatch
+      for todo in state.TodoList -> 
+        match state.TodoBeingEdited with 
+        | Some todoBeingEdited when todoBeingEdited.Id = todo.Id -> 
+            renderEditForm todoBeingEdited dispatch 
+        | otherwise ->
+            renderTodo todo dispatch
     ]
   ]
 
 Program.mkSimple init update render
 |> Program.withReactSynchronous "elmish-app"
-|> Program.withConsoleTrace
 |> Program.run
