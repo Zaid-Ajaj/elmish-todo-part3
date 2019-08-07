@@ -153,13 +153,16 @@ let inputField (state: State) (dispatch: Msg -> unit) =
 
 let renderTodo (todo: Todo) (dispatch: Msg -> unit) =
   div [ "box" ] [
-    div [ "columns"; "is-mobile" ] [
+    div [ "columns"; "is-mobile"; "is-vcentered" ] [
       div [ "column"; "subtitle"] [
-        Html.text todo.Description
+        Html.p [
+          prop.className "subtitle"
+          prop.text todo.Description
+        ]
       ]
 
-      div [ "column"; "is-4" ] [
-        div [ "buttons"; "is-right" ] [
+      div [ "column"; "is-narrow" ] [
+        div [ "buttons" ] [
           Html.button [
             prop.classList [ true, "button"; todo.Completed, "is-success"]
             prop.onClick (fun _ -> dispatch (ToggleCompleted todo.Id))
