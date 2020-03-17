@@ -118,7 +118,7 @@ let update (msg: Msg) (state: State) =
       { state with TodoBeingEdited = nextEditModel }
 
 // Helper function to easily construct div with only classes and children
-let div (classes: string list) (children: Fable.React.ReactElement list) =
+let div (classes: string list) (children: ReactElement list) =
     Html.div [
         prop.classes classes
         prop.children children
@@ -164,7 +164,7 @@ let renderTodo (todo: Todo) (dispatch: Msg -> unit) =
       div [ "column"; "is-narrow" ] [
         div [ "buttons" ] [
           Html.button [
-            prop.classList [ true, "button"; todo.Completed, "is-success"]
+            prop.className [ true, "button"; todo.Completed, "is-success"]
             prop.onClick (fun _ -> dispatch (ToggleCompleted todo.Id))
             prop.children [
               Html.i [ prop.classes [ "fa"; "fa-check" ] ]
